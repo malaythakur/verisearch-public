@@ -2,7 +2,7 @@
 
 **AI Search Engine with Verifiable Citations**
 
-[![CI](https://github.com/malaythakur/verisearch/actions/workflows/ci.yml/badge.svg)](https://github.com/malaythakur/verisearch/actions/workflows/ci.yml)
+[![CI](https://github.com/malaythakur/verisearch-public/actions/workflows/ci.yml/badge.svg)](https://github.com/malaythakur/verisearch-public/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Railway-blueviolet)](https://verisearch-production.up.railway.app/docs)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green)](https://verisearch-production.up.railway.app/mcp/sse)
 
@@ -10,7 +10,7 @@
 
 **Live API:** https://verisearch-production.up.railway.app/docs
 **MCP Endpoint:** https://verisearch-production.up.railway.app/mcp/sse
-**GitHub:** https://github.com/malaythakur/verisearch
+**GitHub:** https://github.com/malaythakur/verisearch-public
 
 ## Key Features
 
@@ -82,8 +82,8 @@ Or open the interactive docs: https://verisearch-production.up.railway.app/docs
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/malaythakur/verisearch.git
-cd verisearch
+git clone https://github.com/malaythakur/verisearch-public.git
+cd verisearch-public
 
 # Backend (Python)
 cd backend
