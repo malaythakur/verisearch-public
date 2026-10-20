@@ -1,0 +1,22 @@
+# Gitleaks configuration for Verisearch.
+# Extends the default ruleset, then allowlists KNOWN-SYNTHETIC test fixtures.
+# These files exist specifically to test the secret-redaction feature and
+# contain dummy values (e.g. "env-key-123456"), not real credentials.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic secrets in tests and example env files"
+paths = [
+    '''backend/tests/.*''',
+    '''.*/tests/.*''',
+    '''\.env\.example''',
+    '''.*_test\.py''',
+    '''.*test_.*\.py''',
+]
+# Dummy fixture values used across redaction tests.
+regexes = [
+    '''env-key-123456''',
+    '''dev-machine-key''',
+    '''sk-(?:test|example|dummy|fake)[A-Za-z0-9]*''',
+]

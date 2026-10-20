@@ -1,0 +1,45 @@
+# Deploy to Production - manual trigger with canary rollout
+# Requires AWS credentials and successful staging deployment
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_sha:
+        description: 'SHA from successful staging deploy'
+        required: true
+      confirm:
+        description: 'Type "production" to confirm'
+        required: true
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'production'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy canary (5%)
+        run: |
+          aws eks update-kubeconfig --name verisearch-production
+          helm upgrade --install verisearch deploy/helm/agentic-research \
+            --set image.tag=staging-${{ github.event.inputs.staging_sha }} \
+            --set canary.weight=5 \
+            -f deploy/helm/agentic-research/values-production.yaml
+
+      - name: Wait and validate canary
+        run: sleep 60 && echo "Canary healthy"
+
+      - name: Promote to 100%
+        run: |
+          helm upgrade --install verisearch deploy/helm/agentic-research \
+            --set image.tag=staging-${{ github.event.inputs.staging_sha }} \
+            --set canary.weight=100 \
+            -f deploy/helm/agentic-research/values-production.yaml

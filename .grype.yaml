@@ -1,0 +1,14 @@
+# Grype configuration for the image vulnerability gate (Phase 10).
+# The gate fails the build on CRITICAL, fixed vulnerabilities.
+#
+# Single ignore: CVE-2026-7210 is a CPython interpreter CVE whose only listed fix is
+# Python 3.15.0b2 — a beta. There is NO stable Python release that resolves it today,
+# so it cannot be remediated by upgrading the base image. The base image runs the
+# latest stable 3.13 patch (3.13.14), which clears the previously-flagged
+# CVE-2025-13462. This single exception is tracked in SECURITY.md and must be removed
+# once a stable Python (3.13.x/3.14.x) ships the fix.
+ignore:
+  - vulnerability: CVE-2026-7210
+
+# Only fail on vulnerabilities that have a fix available.
+only-fixed: true

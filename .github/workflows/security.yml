@@ -1,0 +1,134 @@
+# Security gates for Verisearch (Enterprise Hardening Phase 10, Req 10)
+# Dependency scan, SAST, secret scan, container image scan, and SBOM generation.
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan to catch newly-disclosed advisories on unchanged code.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Dependency vulnerability scan (Req 10.1)
+  # ---------------------------------------------------------------------------
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: |
+          pip install poetry
+          poetry export -f requirements.txt --without-hashes -o requirements-audit.txt 2>/dev/null \
+            || poetry install --only main --no-interaction
+          # Known transitive advisories accepted/tracked (no safe upgrade yet without a
+          # framework bump). Direct deps (pyjwt, cryptography) are kept patched. These
+          # are reviewed in SECURITY.md and revisited on each dependency bump.
+          IGNORES="--ignore-vuln PYSEC-2026-161 --ignore-vuln CVE-2025-54121 --ignore-vuln CVE-2025-62727 --ignore-vuln CVE-2025-71176 --ignore-vuln PYSEC-2026-196"
+          if [ -f requirements-audit.txt ]; then
+            pip-audit -r requirements-audit.txt $IGNORES
+          else
+            pip-audit $IGNORES
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Static application security testing (Req 10.2)
+  # ---------------------------------------------------------------------------
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install bandit
+        run: pip install "bandit[toml]"
+
+      - name: Run bandit SAST
+        run: |
+          # Skip test code; fail on medium+ severity findings.
+          bandit -r backend -x backend/tests,backend/backend/tests -ll
+
+  # ---------------------------------------------------------------------------
+  # Secret scanning (Req 10.2)
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks (standalone binary — no license/API rate-limit)
+        run: |
+          GITLEAKS_VERSION=8.21.2
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          chmod +x gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --redact --verbose --exit-code 1
+
+  # ---------------------------------------------------------------------------
+  # Container image build + vulnerability scan (Req 10.3)
+  # Uses Anchore Grype (not Trivy) — the aquasecurity/trivy-action tags were
+  # subject to a supply-chain compromise (CVE-2026-33634, Mar 2026), so we avoid it.
+  # ---------------------------------------------------------------------------
+  image-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t verisearch-backend:scan -f backend/Dockerfile backend
+
+      - name: Scan image with Grype
+        uses: anchore/scan-action@v6
+        with:
+          image: verisearch-backend:scan
+          fail-build: true
+          output-format: table
+          # CRITICAL-only for the OS image: HIGH findings in upstream base-image
+          # packages are frequently unfixable and would make the gate non-actionable.
+          # Our Python deps are gated at HIGH by pip-audit, and the Dockerfile runs
+          # apt-get upgrade to pull fixed Debian packages.
+          severity-cutoff: critical
+          only-fixed: true
+
+  # ---------------------------------------------------------------------------
+  # Software Bill of Materials (Req 10.4)
+  # ---------------------------------------------------------------------------
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: backend
+          format: spdx-json
+          output-file: verisearch-sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: verisearch-sbom.spdx.json
